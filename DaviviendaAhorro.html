@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Extractor PDF Davivienda Ahorro</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f6f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      padding: 30px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 26px;
+      color: #007bff;
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+
+    .file-input-container {
+      margin: 20px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .button-upload {
+      padding: 8px 15px;
+      background-color: #f1f1f1;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    .button-upload:hover {
+      background-color: #e0e0e0;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    #fileName {
+      margin-left: 10px;
+      color: #444;
+      font-size: 14px;
+    }
+
+    .button-container {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin: 25px 0;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    #processBtn {
+      background-color: #d6d8db;
+      color: #6c757d;
+    }
+    #processBtn:enabled {
+      background-color: #28a745;
+      color: #fff;
+    }
+    #processBtn:enabled:hover {
+      background-color: #218838;
+    }
+
+    #exportBtn {
+      background-color: #6c757d;
+      color: #fff;
+    }
+    #exportBtn:enabled {
+      background-color: #007bff;
+    }
+    #exportBtn:enabled:hover {
+      background-color: #0056b3;
+    }
+
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    p {
+      color: #666;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+
+    #output {
+      margin-top: 20px;
+      text-align: left;
+      font-family: monospace;
+      background-color: #fff;
+      padding: 15px;
+      border: 1px solid #e9ecef;
+      border-radius: 5px;
+      max-height: 250px;
+      overflow-y: auto;
+      color: #495057;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Extractor PDF Ahorros <span style="color:#007bff;">Davivienda</span></h1>
+
+    <div class="file-input-container">
+      <label for="fileInput" class="button-upload">Seleccionar archivo</label>
+      <input type="file" id="fileInput" accept="application/pdf">
+      <span id="fileName">Ningún archivo seleccionado</span>
+    </div>
+
+    <div class="button-container">
+      <button id="processBtn" class="btn" disabled>Procesar PDF</button>
+      <button id="exportBtn" class="btn" disabled>Exportar a CSV</button>
+    </div>
+
+    <p>Seleccione un archivo PDF para comenzar.</p>
+    <div id="output"></div>
+  </div>
+
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+
+    let transactionsData = [];
+    let loadedPDF = null;
+    let year = "2025";
+
+    function formatNumber(valueStr) {
+      if (!valueStr) return "";
+      let cleanedValue = valueStr.replace(/[$, ]/g, '');
+      let sign = "";
+      if (cleanedValue.endsWith('+') || cleanedValue.endsWith('-')) {
+        sign = cleanedValue.slice(-1);
+        cleanedValue = cleanedValue.slice(0, -1);
+      }
+      let formattedNumber = cleanedValue.replace(/\./g, ',');
+      if (sign === '-') {
+        formattedNumber = `-${formattedNumber}`;
+      }
+      return formattedNumber;
+    }
+
+    const fileInput = document.getElementById("fileInput");
+    const processBtn = document.getElementById("processBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const fileNameSpan = document.getElementById("fileName");
+    const outputDiv = document.getElementById("output");
+
+    fileInput.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        fileNameSpan.textContent = file.name;
+        const arrayBuffer = await file.arrayBuffer();
+        loadedPDF = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        outputDiv.textContent = "✅ PDF cargado. Ahora haz clic en PROCESAR PDF.";
+        processBtn.disabled = false;
+        exportBtn.disabled = true;
+      }
+    });
+
+    processBtn.addEventListener("click", async () => {
+      if (!loadedPDF) {
+        alert("Primero selecciona un PDF");
+        return;
+      }
+      transactionsData = [];
+      outputDiv.textContent = "=== PROCESANDO ===\n";
+      processBtn.disabled = true;
+
+      for (let i = 1; i <= loadedPDF.numPages; i++) {
+        const page = await loadedPDF.getPage(i);
+        const textContent = await page.getTextContent();
+        
+        const linesMap = new Map();
+        textContent.items.forEach(item => {
+          const y = Math.round(item.transform[5]);
+          if (!linesMap.has(y)) linesMap.set(y, []);
+          linesMap.get(y).push(item);
+        });
+
+        const sortedY = Array.from(linesMap.keys()).sort((a, b) => b - a);
+
+        for (const y of sortedY) {
+          const lineItems = linesMap.get(y).sort((a, b) => a.transform[4] - b.transform[4]);
+          const cols = lineItems.map(it => it.str.trim()).filter(Boolean);
+          
+          if (cols.length > 2 && /^\d{2}$/.test(cols[0])) {
+            const fecha = `${cols[0]}/${cols[1]}/${year}`;
+            
+            const valorIndex = cols.findIndex(item => item.startsWith('$'));
+
+            let valor = "";
+            let descripcion = "";
+            
+            if (valorIndex !== -1 && cols.length > valorIndex + 1) {
+              valor = cols[valorIndex] + " " + cols[valorIndex + 1];
+              descripcion = cols.slice(valorIndex + 2).join(" ");
+            } else {
+              descripcion = cols.slice(2).join(" ");
+            }
+
+            transactionsData.push({
+              fecha: fecha,
+              descripcion: descripcion,
+              valor: formatNumber(valor)
+            });
+            
+            outputDiv.textContent +=
+              `[OK] ${fecha} | ${descripcion.substring(0, 30)}... | ${formatNumber(valor)}\n`;
+          }
+        }
+      }
+
+      outputDiv.textContent += "\n=== TERMINADO ===\n";
+      processBtn.disabled = true;
+      exportBtn.disabled = false;
+    });
+
+    exportBtn.addEventListener("click", () => {
+      if (transactionsData.length === 0) {
+        alert("No hay datos para exportar");
+        return;
+      }
+
+      let outputContent = "Fecha|Descripcion|Valor\n";
+      transactionsData.forEach(tx => {
+        outputContent += `${tx.fecha}|"${tx.descripcion}"|${tx.valor}\n`;
+      });
+
+      // nombre del archivo = nombre del PDF cargado, pero con .csv
+      const originalName = fileInput.files[0].name.replace(/\.[^/.]+$/, "");
+      const fileName = `${originalName}.csv`;
+
+      const blob = new Blob([outputContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = fileName;
+      link.click();
+    });
+  </script>
+</body>
+</html>
